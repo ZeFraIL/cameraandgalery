@@ -4,11 +4,12 @@ plugins {
 
 android {
     namespace = "zeev.fraiman.cameraandgalery"
-    compileSdk = 34
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "zeev.fraiman.cameraandgalery"
         minSdk = 28
+        //noinspection OldTargetApi
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
