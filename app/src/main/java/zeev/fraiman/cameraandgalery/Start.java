@@ -12,18 +12,21 @@ import androidx.core.view.WindowInsetsCompat;
 
 public class Start extends AppCompatActivity {
 
+    private CountDownTimer cdt;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_start);
+
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
 
-        CountDownTimer cdt=new CountDownTimer(2000,1000) {
+        cdt = new CountDownTimer(2000, 1000) {
             @Override
             public void onTick(long millisUntilFinished) {
 
@@ -31,9 +34,18 @@ public class Start extends AppCompatActivity {
 
             @Override
             public void onFinish() {
-                Intent go=new Intent(Start.this, MainActivity.class);
+                Intent go = new Intent(Start.this, MainActivity.class);
                 startActivity(go);
+                finish();
             }
         }.start();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (cdt != null) {
+            cdt.cancel();
+        }
     }
 }

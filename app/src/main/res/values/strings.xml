@@ -1,3 +1,17 @@
 <resources>
-    <string name="app_name">cameraandgalery</string>
+    <string name="app_name">Camera &amp; Gallery</string>
+    <string name="make_photo">Make a photo</string>
+    <string name="make_video">Make a video</string>
+    <string name="open_gallery">Open gallery</string>
+    <string name="view_info">View information about files</string>
+    <string name="photo_saved">Photo saved: %1$s</string>
+    <string name="video_saved">Video saved: %1$s</string>
+    <string name="info_title">Information about file</string>
+    <string name="file_name_format">File name: %1$s</string>
+    <string name="date_format">Date: %1$s</string>
+    <string name="time_format">Time: %1$s</string>
+    <string name="uri_format">URI: %1$s</string>
+    <string name="type_format">Type: %1$s</string>
+    <string name="ok">OK</string>
+    <string name="camera_permission_required">Camera permission is required</string>
 </resources>

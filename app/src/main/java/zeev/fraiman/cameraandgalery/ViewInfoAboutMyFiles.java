@@ -4,18 +4,24 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.MediaController;
 import android.widget.TextView;
-import android.widget.Toast;
 import android.widget.VideoView;
 
+import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -23,23 +29,32 @@ import com.bumptech.glide.Glide;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ViewInfoAboutMyFiles extends AppCompatActivity {
 
-    private RecyclerView recyclerView;
     private FileAdapter fileAdapter;
-    private List<FileInfo> fileInfoList;
+    private final List<FileInfo> fileInfoList = new ArrayList<>();
     private DatabaseHelper dbHelper;
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        EdgeToEdge.enable(this);
         setContentView(R.layout.activity_view_info_about_my_files);
 
-        dbHelper = new DatabaseHelper(this);
-        fileInfoList = new ArrayList<>();
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
+            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+            return insets;
+        });
 
-        recyclerView = findViewById(R.id.recyclerView);
+        dbHelper = new DatabaseHelper(this);
+
+        RecyclerView recyclerView = findViewById(R.id.recyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         fileAdapter = new FileAdapter(fileInfoList);
         recyclerView.setAdapter(fileAdapter);
@@ -48,28 +63,43 @@ public class ViewInfoAboutMyFiles extends AppCompatActivity {
     }
 
     private void loadFileInfoFromDatabase() {
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
-        Cursor cursor = db.query(DatabaseHelper.TABLE_NAME, null, null, null, null, null, null);
+        executorService.execute(() -> {
+            List<FileInfo> tempList = new ArrayList<>();
+            SQLiteDatabase db = dbHelper.getReadableDatabase();
+            Cursor cursor = db.query(DatabaseHelper.TABLE_NAME, null, null, null, null, null, null);
 
-        if (cursor != null && cursor.moveToFirst()) {
-            do {
-                String name = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_NAME_OF_FILE));
-                String date = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_DATE_OF_FILE));
-                String time = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_TIME_OF_FILE));
-                String uri = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_URI_OF_FILE));
-                String type = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_TYPE_OF_FILE));
+            if (cursor != null) {
+                if (cursor.moveToFirst()) {
+                    int nameIdx = cursor.getColumnIndex(DatabaseHelper.COLUMN_NAME_OF_FILE);
+                    int dateIdx = cursor.getColumnIndex(DatabaseHelper.COLUMN_DATE_OF_FILE);
+                    int timeIdx = cursor.getColumnIndex(DatabaseHelper.COLUMN_TIME_OF_FILE);
+                    int uriIdx = cursor.getColumnIndex(DatabaseHelper.COLUMN_URI_OF_FILE);
+                    int typeIdx = cursor.getColumnIndex(DatabaseHelper.COLUMN_TYPE_OF_FILE);
 
-                fileInfoList.add(new FileInfo(name, date, time, uri, type));
-            } while (cursor.moveToNext());
-            cursor.close();
-        }
+                    do {
+                        String name = nameIdx != -1 ? cursor.getString(nameIdx) : "";
+                        String date = dateIdx != -1 ? cursor.getString(dateIdx) : "";
+                        String time = timeIdx != -1 ? cursor.getString(timeIdx) : "";
+                        String uri = uriIdx != -1 ? cursor.getString(uriIdx) : "";
+                        String type = typeIdx != -1 ? cursor.getString(typeIdx) : "";
 
-        fileAdapter.notifyDataSetChanged();
+                        tempList.add(new FileInfo(name, date, time, uri, type));
+                    } while (cursor.moveToNext());
+                }
+                cursor.close();
+            }
+
+            mainHandler.post(() -> {
+                fileInfoList.clear();
+                fileInfoList.addAll(tempList);
+                fileAdapter.notifyDataSetChanged();
+            });
+        });
     }
 
     private class FileAdapter extends RecyclerView.Adapter<FileAdapter.FileViewHolder> {
 
-        private List<FileInfo> fileInfoList;
+        private final List<FileInfo> fileInfoList;
 
         public FileAdapter(List<FileInfo> fileInfoList) {
             this.fileInfoList = fileInfoList;
@@ -87,19 +117,14 @@ public class ViewInfoAboutMyFiles extends AppCompatActivity {
             FileInfo fileInfo = fileInfoList.get(position);
             holder.fileName.setText(fileInfo.getName());
 
-            if (fileInfo.getType().equals("image")) {
-                Glide.with(holder.itemView.getContext())
-                        .load(Uri.parse(fileInfo.getUri()))
-                        .override(130, 130)
-                        .into(holder.fileImage);
-            } else {
-                // Placeholder for video thumbnail
-                holder.fileImage.setImageResource(R.drawable.ic_video);
-            }
+            Glide.with(holder.itemView.getContext())
+                    .load(Uri.parse(fileInfo.getUri()))
+                    .override(130, 130)
+                    .placeholder("image".equals(fileInfo.getType()) ? R.drawable.ic_photo : R.drawable.ic_video)
+                    .error("image".equals(fileInfo.getType()) ? R.drawable.ic_photo : R.drawable.ic_video)
+                    .into(holder.fileImage);
 
-            holder.itemView.setOnClickListener(v -> {
-                showFileInfoDialog(fileInfo);
-            });
+            holder.itemView.setOnClickListener(v -> showFileInfoDialog(fileInfo));
         }
 
         @Override
@@ -121,53 +146,67 @@ public class ViewInfoAboutMyFiles extends AppCompatActivity {
 
     private void showFileInfoDialog(FileInfo fileInfo) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Information about file");
+        builder.setTitle(R.string.info_title);
 
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        container.setPadding(padding, padding, padding, padding);
 
-        VideoView videoView=null;
+        VideoView videoView = null;
 
-        if (fileInfo.getType().equals("image")) {
+        if ("image".equals(fileInfo.getType())) {
             ImageView imageView = new ImageView(this);
-            imageView.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-            ));
-            imageView.setImageURI(Uri.parse(fileInfo.getUri()));
+                    (int) (200 * getResources().getDisplayMetrics().density)
+            );
+            imageView.setLayoutParams(lp);
+            Glide.with(this).load(Uri.parse(fileInfo.getUri())).into(imageView);
             container.addView(imageView);
-        } else if (fileInfo.getType().equals("video")) {
+        } else if ("video".equals(fileInfo.getType())) {
             videoView = new VideoView(this);
-            videoView.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-            ));
+                    (int) (200 * getResources().getDisplayMetrics().density)
+            );
+            videoView.setLayoutParams(lp);
             videoView.setVideoURI(Uri.parse(fileInfo.getUri()));
-            videoView.start();
+
+            MediaController mediaController = new MediaController(this);
+            mediaController.setAnchorView(videoView);
+            videoView.setMediaController(mediaController);
+
             container.addView(videoView);
+            videoView.start();
         }
 
-        // Добавляем информацию о файле
         TextView fileInfoText = new TextView(this);
-        fileInfoText.setText(
-                "File name: " + fileInfo.getName() + "\n" +
-                        "Date: " + fileInfo.getDate() + "\n" +
-                        "Time: " + fileInfo.getTime() + "\n" +
-                        "URI: " + fileInfo.getUri() + "\n" +
-                        "Type: " + fileInfo.getType()
-        );
+        fileInfoText.setPadding(0, padding, 0, 0);
+        String details = getString(R.string.file_name_format, fileInfo.getName()) + "\n" +
+                getString(R.string.date_format, fileInfo.getDate()) + "\n" +
+                getString(R.string.time_format, fileInfo.getTime()) + "\n" +
+                getString(R.string.uri_format, fileInfo.getUri()) + "\n" +
+                getString(R.string.type_format, fileInfo.getType());
+        fileInfoText.setText(details);
         container.addView(fileInfoText);
 
         builder.setView(container);
-        builder.setPositiveButton("OK", (dialog, which) -> dialog.dismiss());
+        builder.setPositiveButton(R.string.ok, (dialog, which) -> dialog.dismiss());
         AlertDialog dialog = builder.create();
         dialog.show();
 
         VideoView finalVideoView = videoView;
         dialog.setOnDismissListener(d -> {
-            if (fileInfo.getType().equals("video")) {
+            if (finalVideoView != null) {
                 finalVideoView.stopPlayback();
             }
         });
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        executorService.shutdown();
     }
 }

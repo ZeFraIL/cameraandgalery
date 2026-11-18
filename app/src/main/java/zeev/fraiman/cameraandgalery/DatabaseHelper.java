@@ -52,6 +52,5 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put(COLUMN_URI_OF_FILE, uri);
         values.put(COLUMN_TYPE_OF_FILE, type);
         db.insert(TABLE_NAME, null, values);
-        db.close();
     }
 }

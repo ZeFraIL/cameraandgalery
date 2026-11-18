@@ -9,7 +9,7 @@ CameraAndGalery
 Zeev Fraiman
 
 **Date:**
-May 2024
+May 2024 (Updated: February 2025)
 
 **Language:**
 Java
@@ -31,13 +31,13 @@ ________________________________________
 •	Record videos using the system camera.
 •	Save file information (name, date, time, URI) to SQLite.
 •	View a list of all saved records.
-•	View file details (photo preview or video playback) in a popup dialog.
+•	View file details (photo preview or video playback with controls) in a popup dialog.
 •	Open the system gallery.
 
 ### Non-functional Requirements
-•	**Performance:** Fast loading of the file list from the DB using RecyclerView.
-•	**Usability:** Simple interface with four main buttons on the home screen.
-•	**Reliability:** Proper permission handling and camera availability checks.
+•	**Performance:** Fast background loading of the file list from DB using RecyclerView and ExecutorService.
+•	**Usability:** Simple interface with four main buttons on the home screen, adapted for system Edge-to-Edge insets.
+•	**Reliability:** Proper permission handling (`ActivityResultContracts.RequestPermission`) and secure file sharing via `FileProvider`.
 ________________________________________
 ## 🧠 General Architecture
 •	**Chosen Approach:**
@@ -48,10 +48,11 @@ For a small-scale project, this approach ensures clear separation between data (
 
 •	**Main System Components:**
 - **Model:** DatabaseHelper, FileInfo.
-- **View:** XML layouts (activity_main, item_file_info).
-- **Controller:** MainActivity, ViewInfoAboutMyFiles.
+- **View:** XML layouts (activity_main, activity_view_info_about_my_files, item_file_info).
+- **Controller:** Start, MainActivity, ViewInfoAboutMyFiles.
 ________________________________________
 ## 🧩 UML Diagram
+`[Start]` –> `[MainActivity]`
 `[MainActivity]` –> `[DatabaseHelper]`
 `[ViewInfoAboutMyFiles]` –> `[DatabaseHelper]`
 `[ViewInfoAboutMyFiles]` –> `[FileInfo]`
@@ -63,14 +64,20 @@ The project uses a flat package structure: `zeev.fraiman.cameraandgalery`.
 - For scaling, it is recommended to split into `data`, `ui`, and `model` packages.
 ________________________________________
 ## 🧩 Detailed Class Description
+### 📌 Class: Start
+**Role:** Splash Screen.
+**Responsibility:** Displays splash screen for 2 seconds, safely cancels timer in `onDestroy()`, launches `MainActivity`, and calls `finish()`.
+
 ### 📌 Class: MainActivity
 **Role:** Main application screen.
-**Responsibility:** Lifecycle management, button click handling, launching camera/video Intents, and requesting permissions.
+**Responsibility:** Lifecycle management, button click handling, launching camera/video Intents, runtime CAMERA permission handling, and asynchronous DB saving.
 **Main Methods:**
-- `onCreate()` — Initializes UI and launchers.
+- `onCreate()` — Initializes UI, launchers, and Edge-to-Edge insets.
+- `checkCameraPermissionAndExecute()` — Verifies and requests camera permissions.
 - `dispatchTakePictureIntent()` — Starts camera for taking a photo.
 - `dispatchTakeVideoIntent()` — Starts camera for recording video.
-- `saveFileInfoToDatabase()` — Writes data to the database.
+- `openGallery()` — Safely opens system gallery with valid MIME intent.
+- `saveFileInfoToDatabase()` — Saves file info asynchronously off the UI thread.
 
 ### 📌 Class: DatabaseHelper
 **Role:** Data layer.
@@ -82,17 +89,19 @@ ________________________________________
 
 ### 📌 Class: ViewInfoAboutMyFiles
 **Role:** List view screen.
-**Responsibility:** Loads data from the DB, displays it in a RecyclerView via an adapter, and shows a detail dialog.
+**Responsibility:** Asynchronously loads data from the DB, displays items in a RecyclerView with video/image thumbnails via Glide, and shows interactive detail dialogs.
 ________________________________________
 ## 🔄 Application Workflow
-1. User clicks "Take Photo".
-2. System camera opens.
-3. After capture, metadata (file path and timestamp) is saved to SQLite via `DatabaseHelper`.
-4. User navigates to "View Info" to see the list of all entries.
-5. Clicking a list item opens a dialog with a preview.
+1. App launches `Start` with a 2-second timer.
+2. `MainActivity` opens. User taps "Make a photo" or "Make a video".
+3. CAMERA permission is verified/requested. System camera app launches.
+4. After capture, metadata (file path and timestamp) is written to SQLite in a background thread.
+5. User navigates to "View info", where entries are fetched asynchronously.
+6. RecyclerView displays image and video thumbnails using Glide.
+7. Clicking an item opens a dialog with full details and video playback controls (`MediaController`).
 ________________________________________
 ## 🎨 UI/UX Analysis
-•	**Design Choice:** A grid-like button structure for quick access to core features.
+•	**Design Choice:** A grid-like button structure for quick access to core features with Edge-to-Edge support.
 •	**Principles Used:**
 –	**Simplicity:** Minimal steps to achieve the goal.
 –	**Logic:** Meaningful grouping of actions.
@@ -100,29 +109,31 @@ ________________________________________
 ________________________________________
 ## ⚙️ Threading
 •	**Usage:**
-- In the current version, DB and UI operations mostly run on the Main Thread, which is acceptable for small datasets.
-•	**ANR Prevention:** Using Glide for image loading, which handles background threading efficiently.
+- Yes. SQLite DB reading and writing execute asynchronously in background threads using `ExecutorService`.
+•	**ANR Prevention:**
+- Database I/O is offloaded from the UI Thread.
+- Glide is used for asynchronous image/video thumbnail decoding and caching.
 ________________________________________
 ## 💾 Data Management
-•	**Storage:** Local SQLite database (all_info.db) and app's internal storage (for media).
-•	**Choice:** Ensures autonomy and fast data retrieval without internet access.
+•	**Storage:** Local SQLite database (all_info.db) and app's private external storage `getExternalFilesDir()` (for media).
+•	**Choice:** Ensures autonomy, compliance with Android storage policies, and fast offline data retrieval.
 ________________________________________
 ## 🌐 Networking
 •	This version does not include networking features (the app is fully offline).
 ________________________________________
 ## 🔐 Security (Basic Level)
-•	File access is restricted to the application scope using `FileProvider`.
+•	File access is restricted to application scope and shared safely using `FileProvider` (`<external-files-path>`).
 ________________________________________
 ## 🧪 Testing
 •	**Unit Tests:** Validating file name generation logic.
 •	**UI Tests:** Verifying camera intent launching (automated via Espresso).
 ________________________________________
 ## 🐞 Error Handling
-•	`resolveActivity` check before launching Intents to prevent crashes if no camera app is found.
-•	Try-catch blocks during temporary file creation.
+•	Intent handling checks and try-catch blocks during temporary file creation.
+•	Permission denials are handled gracefully with Toast user notifications.
 ________________________________________
 ## ⚡ Performance
-•	**Optimizations:** Glide for caching and lazy loading of previews.
+•	**Optimizations:** Background threads (`ExecutorService`) for SQLite and Glide caching for video/image previews.
 •	**Bottlenecks:** Pagination might be required for very large lists (thousands of entries).
 ________________________________________
 ## 🚀 Expansion Possibilities

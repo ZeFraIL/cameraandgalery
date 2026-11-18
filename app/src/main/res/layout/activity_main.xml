@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -11,27 +12,27 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="30dp"
-        android:text="Make a photo" />
+        android:text="@string/make_photo" />
 
     <Button
         android:id="@+id/btnRecordVideo"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="30dp"
-        android:text="Make a video" />
+        android:text="@string/make_video" />
 
     <Button
         android:id="@+id/btnViewGallery"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="30dp"
-        android:text="Open galery" />
+        android:text="@string/open_gallery" />
 
     <Button
         android:id="@+id/btnViewInfo"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="30dp"
-        android:text="View information about files" />
+        android:text="@string/view_info" />
 
 </LinearLayout>
